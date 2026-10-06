@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FavAgent - AI 收藏夹管理助手</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50:'#f5f3ff',100:'#ede9fe',200:'#ddd6fe',300:'#c4b5fd',400:'#a78bfa',500:'#8b5cf6',600:'#7c3aed',700:'#6d28d9',800:'#5b21b6',900:'#4c1d95' },
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div id="app">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center">
+                        <span class="text-white text-lg">⚡</span>
+                    </div>
+                    <h1 class="text-xl font-bold text-gray-900">FavAgent</h1>
+                    <span class="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">AI</span>
+                </div>
+
+                <div class="flex items-center space-x-4">
+                    <!-- Agent Status -->
+                    <div class="hidden sm:flex items-center space-x-2 text-sm" :class="agentStatus.ai_enabled ? 'text-green-600' : 'text-amber-600'">
+                        <span class="w-2 h-2 rounded-full" :class="agentStatus.ai_enabled ? 'bg-green-500 animate-pulse' : 'bg-amber-500'"></span>
+                        <span>{{ agentStatus.ai_enabled ? 'AI 已连接' : '规则模式' }}</span>
+                    </div>
+
+                    <!-- Reminder Bell -->
+                    <button @click="showReminders = true" class="relative p-2 text-gray-500 hover:text-primary-600 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                        </svg>
+                        <span v-if="unreadCount > 0" class="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
+                    </button>
+
+                    <!-- Settings -->
+                    <button @click="showSettings = true" class="p-2 text-gray-500 hover:text-primary-600 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </button>
+
+                    <!-- Add Video Button -->
+                    <button @click="showAddVideo = true" class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        <span>收藏视频</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+                <div class="text-2xl font-bold text-gray-900">{{ stats.total }}</div>
+                <div class="text-sm text-gray-500">总收藏</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+                <div class="text-2xl font-bold text-green-600">{{ stats.watched }}</div>
+                <div class="text-sm text-gray-500">已观看</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+                <div class="text-2xl font-bold text-amber-600">{{ stats.unwatched }}</div>
+                <div class="text-sm text-gray-500">待观看</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+                <div class="text-2xl font-bold text-primary-600">{{ stats.pending_reminders }}</div>
+                <div class="text-sm text-gray-500">待提醒</div>
+            </div>
+        </div>
+
+        <!-- AI Summary -->
+        <div v-if="summary" class="bg-gradient-to-r from-primary-50 to-purple-50 border border-primary-100 rounded-xl p-4 mb-8">
+            <div class="flex items-start space-x-3">
+                <span class="text-2xl">🤖</span>
+                <div>
+                    <div class="text-sm font-medium text-primary-900 mb-1">AI 助手小结</div>
+                    <div class="text-sm text-primary-700">{{ summary }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View Toggle & Filters -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-3 sm:space-y-0">
+            <div class="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
+                <button @click="viewMode = 'time'" :class="viewMode === 'time' ? 'bg-white shadow-sm text-primary-700' : 'text-gray-600 hover:text-gray-900'" class="px-4 py-2 rounded-md text-sm font-medium transition-all">
+                    📅 按时间
+                </button>
+                <button @click="viewMode = 'tags'" :class="viewMode === 'tags' ? 'bg-white shadow-sm text-primary-700' : 'text-gray-600 hover:text-gray-900'" class="px-4 py-2 rounded-md text-sm font-medium transition-all">
+                    🏷️ 按标签
+                </button>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <!-- Search -->
+                <div class="relative">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input v-model="searchQuery" @input="debouncedFetch" type="text" placeholder="搜索视频..." class="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent w-48">
+                </div>
+
+                <!-- Platform Filter -->
+                <select v-model="filterPlatform" @change="fetchVideos" class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    <option value="">全部平台</option>
+                    <option v-for="p in platforms" :value="p.value">{{ p.icon }} {{ p.label }}</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Time View -->
+        <div v-if="viewMode === 'time'">
+            <!-- Category Filter -->
+            <div class="flex flex-wrap gap-2 mb-6">
+                <button @click="filterCategory = ''" :class="!filterCategory ? 'bg-primary-100 text-primary-700 border-primary-200' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-200'" class="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors">
+                    全部分类
+                </button>
+                <button v-for="cat in allCategories" @click="filterCategory = cat" :class="filterCategory === cat ? 'bg-primary-100 text-primary-700 border-primary-200' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-200'" class="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors">
+                    {{ cat }}
+                </button>
+            </div>
+
+            <!-- Video Grid -->
+            <div v-if="filteredVideos.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div v-for="video in filteredVideos" :key="video.id" class="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group">
+                    <div class="p-5">
+                        <div class="flex items-start justify-between mb-3">
+                            <span class="text-xs font-medium px-2 py-1 rounded-md" :class="getCategoryStyle(video.category)">{{ video.category }}</span>
+                            <div class="flex items-center space-x-1">
+                                <span class="text-xs px-2 py-0.5 rounded-full" :class="video.is_watched ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'">
+                                    {{ video.is_watched ? '已观看' : '待观看' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <h3 class="font-semibold text-gray-900 mb-2 line-clamp-2 text-sm leading-relaxed">{{ video.title }}</h3>
+
+                        <div v-if="video.author" class="text-xs text-gray-500 mb-3">
+                            <span>by {{ video.author }}</span>
+                        </div>
+
+                        <!-- Tags -->
+                        <div class="flex flex-wrap gap-1.5 mb-3">
+                            <span v-for="tag in video.tags" :key="tag.id" class="text-xs px-2 py-0.5 rounded-full font-medium" :style="{ backgroundColor: tag.color + '18', color: tag.color }">
+                                {{ tag.name }}
+                            </span>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="flex items-center justify-between pt-3 border-t border-gray-50">
+                            <div class="flex items-center space-x-2 text-xs text-gray-400">
+                                <span>{{ getPlatformIcon(video.platform) }}</span>
+                                <span>{{ formatDate(video.favorited_at) }}</span>
+                            </div>
+                            <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button v-if="!video.is_watched" @click="markWatched(video.id)" class="p-1.5 text-gray-400 hover:text-green-600 transition-colors" title="标记已观看">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                </button>
+                                <button @click="reclassify(video.id)" class="p-1.5 text-gray-400 hover:text-primary-600 transition-colors" title="重新分类">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                    </svg>
+                                </button>
+                                <button @click="deleteVideo(video.id)" class="p-1.5 text-gray-400 hover:text-red-600 transition-colors" title="删除">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else class="text-center py-16">
+                <div class="text-4xl mb-4">📭</div>
+                <div class="text-gray-500">暂无收藏的视频</div>
+                <button @click="showAddVideo = true" class="mt-4 text-primary-600 hover:text-primary-700 text-sm font-medium">去收藏第一个视频 →</button>
+            </div>
+        </div>
+
+        <!-- Tags View -->
+        <div v-if="viewMode === 'tags'">
+            <div v-if="Object.keys(videosByTag).length > 0">
+                <div v-for="(videos, tagName) in videosByTag" :key="tagName" class="mb-8">
+                    <div class="flex items-center space-x-2 mb-4">
+                        <span class="w-3 h-3 rounded-full" :style="{ backgroundColor: getTagColor(tagName) }"></span>
+                        <h3 class="text-lg font-semibold text-gray-900">{{ tagName }}</h3>
+                        <span class="text-sm text-gray-400">({{ videos.length }})</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div v-for="video in videos" :key="video.id" class="bg-white rounded-lg border border-gray-100 p-4 hover:shadow-sm transition-shadow">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="text-sm font-medium text-gray-900 truncate">{{ video.title }}</h4>
+                                    <div class="flex items-center space-x-2 mt-1.5 text-xs text-gray-400">
+                                        <span>{{ getPlatformIcon(video.platform) }}</span>
+                                        <span>{{ video.category }}</span>
+                                        <span>·</span>
+                                        <span>{{ formatDate(video.favorited_at) }}</span>
+                                    </div>
+                                </div>
+                                <span class="ml-2 text-xs px-1.5 py-0.5 rounded" :class="video.is_watched ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'">
+                                    {{ video.is_watched ? '已看' : '未看' }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div v-else class="text-center py-16">
+                <div class="text-4xl mb-4">🏷️</div>
+                <div class="text-gray-500">暂无标签数据</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Video Modal -->
+    <div v-if="showAddVideo" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="showAddVideo = false">
+        <div class="fixed inset-0 bg-black/30 backdrop-blur-sm"></div>
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 z-10">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-bold text-gray-900">收藏新视频</h2>
+                <button @click="showAddVideo = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <form @submit.prevent="submitVideo" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">视频标题 <span class="text-red-500">*</span></label>
+                    <input v-model="newVideo.title" required type="text" placeholder="输入视频标题，AI 将自动分类..." class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">视频链接</label>
+                    <input v-model="newVideo.url" type="url" placeholder="https://..." class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">来源平台</label>
+                        <select v-model="newVideo.platform" class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <option v-for="p in platforms" :value="p.value">{{ p.icon }} {{ p.label }}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">作者</label>
+                        <input v-model="newVideo.author" type="text" placeholder="UP主/作者" class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">描述（可选）</label>
+                    <textarea v-model="newVideo.description" rows="2" placeholder="视频描述信息，帮助 AI 更精准分类..." class="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">手动添加标签（可选）</label>
+                    <div class="flex flex-wrap gap-2">
+                        <label v-for="tag in allTags" :key="tag.id" class="cursor-pointer">
+                            <input type="checkbox" :value="tag.id" v-model="newVideo.tag_ids" class="hidden peer">
+                            <span class="text-xs px-2.5 py-1 rounded-full border border-gray-200 peer-checked:border-primary-300 peer-checked:bg-primary-50 peer-checked:text-primary-700 text-gray-600 transition-colors">
+                                {{ tag.name }}
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
+                    <button type="button" @click="showAddVideo = false" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">取消</button>
+                    <button type="submit" :disabled="!newVideo.title || submitting" class="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2">
+                        <svg v-if="submitting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        <span>{{ submitting ? 'AI 分析中...' : '收藏并分析' }}</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Reminders Modal -->
+    <div v-if="showReminders" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="showReminders = false">
+        <div class="fixed inset-0 bg-black/30 backdrop-blur-sm"></div>
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] overflow-hidden z-10 flex flex-col">
+            <div class="flex items-center justify-between p-6 border-b border-gray-100">
+                <h2 class="text-lg font-bold text-gray-900">观看提醒</h2>
+                <div class="flex items-center space-x-2">
+                    <button v-if="reminders.length > 0" @click="readAllReminders" class="text-xs text-primary-600 hover:text-primary-700 font-medium">全部已读</button>
+                    <button @click="showReminders = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="overflow-y-auto flex-1 p-6">
+                <div v-if="reminders.length > 0" class="space-y-3">
+                    <div v-for="r in reminders" :key="r.id" class="flex items-center justify-between p-3 bg-amber-50 border border-amber-100 rounded-lg">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium text-gray-900 truncate">{{ r.video?.title || '未知视频' }}</div>
+                            <div class="text-xs text-gray-500 mt-0.5">收藏于 {{ formatDate(r.video?.favorited_at) }}</div>
+                        </div>
+                        <div class="flex items-center space-x-2 ml-3">
+                            <a v-if="r.video?.url" :href="r.video.url" target="_blank" class="text-xs text-primary-600 hover:text-primary-700 font-medium whitespace-nowrap">去观看</a>
+                            <button @click="readReminder(r.id)" class="text-xs text-gray-500 hover:text-gray-700">已读</button>
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="text-center py-12">
+                    <div class="text-3xl mb-3">🔔</div>
+                    <div class="text-gray-500 text-sm">暂无待观看提醒</div>
+                    <div class="text-gray-400 text-xs mt-1">收藏的视频到期后会自动提醒你观看</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div v-if="showSettings" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="showSettings = false">
+        <div class="fixed inset-0 bg-black/30 backdrop-blur-sm"></div>
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 z-10">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-bold text-gray-900">设置</h2>
+                <button @click="showSettings = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">提醒周期（天）</label>
+                    <div class="flex items-center space-x-3">
+                        <input v-model.number="preferences.reminder_days" type="range" min="1" max="14" class="flex-1 accent-primary-600">
+                        <span class="text-sm font-medium text-primary-700 w-12 text-center">{{ preferences.reminder_days }}天</span>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">收藏超过该天数未观看将触发提醒</p>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-medium text-gray-700">自动分类</div>
+                        <div class="text-xs text-gray-400">收藏时自动使用 AI 分析分类</div>
+                    </div>
+                    <button @click="preferences.auto_classify = !preferences.auto_classify" :class="preferences.auto_classify ? 'bg-primary-600' : 'bg-gray-200'" class="relative w-11 h-6 rounded-full transition-colors">
+                        <span :class="preferences.auto_classify ? 'translate-x-5' : 'translate-x-0.5'" class="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"></span>
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-medium text-gray-700">智能提醒</div>
+                        <div class="text-xs text-gray-400">根据观看习惯自动优化提醒周期</div>
+                    </div>
+                    <button @click="preferences.smart_reminder = !preferences.smart_reminder" :class="preferences.smart_reminder ? 'bg-primary-600' : 'bg-gray-200'" class="relative w-11 h-6 rounded-full transition-colors">
+                        <span :class="preferences.smart_reminder ? 'translate-x-5' : 'translate-x-0.5'" class="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"></span>
+                    </button>
+                </div>
+
+                <!-- Smart Suggestion -->
+                <div v-if="smartSuggestion" class="bg-primary-50 border border-primary-100 rounded-lg p-3">
+                    <div class="text-xs font-medium text-primary-900 mb-1">💡 AI 建议</div>
+                    <div class="text-xs text-primary-700">{{ smartSuggestion.reason }}</div>
+                    <button v-if="smartSuggestion.suggested_days !== preferences.reminder_days" @click="preferences.reminder_days = smartSuggestion.suggested_days; savePreferences()" class="text-xs text-primary-600 hover:text-primary-700 font-medium mt-2">
+                        采纳建议 ({{ smartSuggestion.suggested_days }}天) →
+                    </button>
+                </div>
+
+                <!-- Tag Management -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-sm font-medium text-gray-700">标签管理</label>
+                        <button @click="showAddTag = !showAddTag" class="text-xs text-primary-600 hover:text-primary-700 font-medium">+ 新标签</button>
+                    </div>
+                    <div v-if="showAddTag" class="flex items-center space-x-2 mb-3">
+                        <input v-model="newTag.name" type="text" placeholder="标签名" class="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <input v-model="newTag.color" type="color" class="w-8 h-8 rounded cursor-pointer border-0">
+                        <button @click="createTag" class="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium">添加</button>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                        <span v-for="tag in allTags" :key="tag.id" class="text-xs px-2 py-1 rounded-full flex items-center space-x-1" :style="{ backgroundColor: tag.color + '18', color: tag.color }">
+                            <span>{{ tag.name }}</span>
+                            <button v-if="!tag.is_system" @click="deleteTag(tag.id)" class="hover:opacity-70">×</button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end mt-6 pt-4 border-t border-gray-100">
+                <button @click="savePreferences" class="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <transition name="toast">
+        <div v-if="toast.show" class="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg text-sm flex items-center space-x-2">
+            <span>{{ toast.icon }}</span>
+            <span>{{ toast.message }}</span>
+        </div>
+    </transition>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
